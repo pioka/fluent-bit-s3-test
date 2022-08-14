@@ -1,0 +1,49 @@
+version: "3"
+
+services:
+  logger:
+    image: alpine:latest 
+    volumes:
+      - ./logger.sh:/logger.sh
+      - log_vol:/log:rw
+    command: ['/bin/sh','/logger.sh','/log/app.log']
+
+  minio:
+    image: minio/minio:latest
+    ports:
+      - 9000:9000
+      - 9001:9001
+    volumes:
+      - minio_vol:/data
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command:
+      - server
+      - /data
+      - --console-address=:9001
+
+  fluentbit:
+    image: fluent/fluent-bit:latest
+    volumes:
+      - log_vol:/log:rw
+    environment:
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+    command:
+      - -v
+      - --input=tail
+      -   --prop=tag=log
+      -   --prop=path=/log/app.log
+      -   --prop=db=/log/app.log.db
+      - --output=s3
+      -   --prop=match=*
+      -   --prop=endpoint=http://minio:9000
+      -   --prop=tls=off
+      -   --prop=bucket=log-bucket
+      -   --prop=upload_timeout=10s
+
+volumes:
+  log_vol: {}
+  minio_vol: {}
+
